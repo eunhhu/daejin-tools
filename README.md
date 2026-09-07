@@ -12,11 +12,13 @@
 ```text
 daejin-tools/
 ├── apps/
-│   └── sugang/              # 기존 수강 도구와 전용 리소스
+│   ├── sugang/              # 기존 수강 도구와 전용 리소스
+│   └── library/             # 접속 시 조회하는 도서관 예약실 시간표
 ├── src/
 │   └── daejin_tools/        # 공통 Python 코드용 네임스페이스
 ├── tests/
 │   ├── sugang/              # 계정 없이 실행하는 기존 기능 회귀 테스트
+│   ├── library/             # 오프라인 파서·캐시·API·브라우저 테스트
 │   └── test_*.py            # 저장소 경계·공통 패키지 테스트
 ├── deploy/
 │   └── sugang/              # 기존 배포 참고 파일 (자동 적용 안 함)
@@ -25,6 +27,7 @@ daejin-tools/
 └── .github/workflows/       # 오프라인 테스트 및 빌드 CI
 ```
 
+- **도서관 시간표:** [apps/library](apps/library/README.md) — 방문 시에만 조회, 자동 갱신 없음
 - **기존 수강 코드:** [apps/sugang](apps/sugang/README.md)
 - **새 기능 추가:** [기여 안내](CONTRIBUTING.md) · [아키텍처](docs/architecture.md)
 - **기존 경로에서 이전:** [마이그레이션 안내](docs/migration.md)
@@ -48,9 +51,11 @@ python -m venv .venv
 `.venv\Scripts\Activate.ps1`을 사용합니다.
 
 ```bash
-python -m pip install -e ".[dev]" -r apps/sugang/requirements-web.txt
+python -m pip install -e ".[dev]" -r apps/sugang/requirements-web.txt -r apps/library/requirements.txt
 python -m pytest -q
-python -m ruff check src tests
+python -m ruff check src tests apps/library
+npm ci
+npm test
 python -m build
 ```
 

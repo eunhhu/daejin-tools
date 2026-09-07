@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="robots" content="noindex,nofollow">
+  <title>도서관 빈자리 · Daejin Tools</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/booking.css">
+  <script type="module" src="/static/app.js"></script>
+</head>
+<body>
+  <header class="site-header"><a class="wordmark" href="/">Daejin<span>Tools</span><small>도서관</small></a><a class="external" href="/manual">사용설명서</a><a class="external" href="https://library.daejin.ac.kr/seminar_intro.mir" target="_blank" rel="noopener noreferrer">공식 예약 안내 ↗</a></header>
+  <main>
+    <div class="intro"><div><p class="eyebrow">LIBRARY / ROOM FINDER</p><h1>빈 시간, 빈 공간.</h1><p class="subtitle">방마다 눌러보지 말고, 한 번에 찾아봐.</p></div><div class="quiet-badge"><span class="quiet-dot"></span>접속할 때만 조회<small>자동 갱신 없음</small></div></div>
+    <section class="toolbar" aria-label="시간표 조건">
+      <div class="date-picker"><button id="prev" class="icon-button" aria-label="이전 날짜">‹</button><label class="date-field"><span id="day-label">날짜</span><input id="date" type="date" aria-label="조회 날짜"></label><button id="next" class="icon-button" aria-label="다음 날짜">›</button><button id="today" class="text-button">오늘</button></div>
+      <div class="toolbar-right"><label class="capacity">인원 <input id="capacity" type="number" min="1" max="99" value="1" inputmode="numeric" aria-label="이용 인원"> 명</label><button id="refresh" class="primary">새로고침 ↻</button></div>
+    </section>
+    <div class="filter-line"><div id="groups" class="segments" role="group" aria-label="시설 종류"><button data-group="all" aria-pressed="true">전체</button><button data-group="S" aria-pressed="false">세미나실</button><button data-group="C" aria-pressed="false">캐럴</button><button data-group="Z" aria-pressed="false">소강당</button></div><p id="summary" class="summary">조회 준비 중</p></div>
+    <div class="status-line"><p id="status" role="status" aria-live="polite">도서관 시간을 불러올 준비 중이야.</p><div class="legend"><span><i class="key available"></i>시작 가능</span><span><i class="key unavailable"></i>선택 불가</span><span><i class="key unknown"></i>확인 못 함</span></div></div>
+    <div id="message" class="message" role="alert" hidden></div>
+    <section class="board" aria-label="호실별 예약 시작시간"><div id="loading" class="loading" hidden><span class="spinner" aria-hidden="true"></span><h2>빈 시간을 모으고 있어.</h2><p>학교에 부담이 가지 않도록 방을 하나씩 확인해.<br>처음 조회는 잠시 걸릴 수 있어.</p></div><div id="table-wrap" class="table-wrap" tabindex="0" aria-label="좌우로 스크롤 가능한 시간표"><table id="schedule"><caption class="sr-only">호실별 선택 가능한 예약 시작 시간</caption><thead></thead><tbody></tbody></table></div><div id="empty" class="empty" hidden>조건에 맞는 호실이 없어. 시설 종류나 인원을 바꿔봐.</div></section>
+    <div class="board-foot"><span>↔ 다른 호실 · ↕ 다른 시간은 표 안에서 스크롤해.</span><span>시간은 모두 한국 시간 기준</span></div>
+    <aside class="explanation"><strong>초록 칸은 ‘예약 시작을 선택할 수 있는 시간’이야.</strong><p>이용 가능한 전체 구간이나 예약 완료를 뜻하지 않아. 회색은 예약·휴실·운영시간·계정 제한 등으로 선택할 수 없는 시간이야. 이용 길이와 최종 예약 가능 여부는 도서관에서 확인해 줘.</p><p>5분 이내 조회는 함께 쓰고, 한 번에 하나씩 확인해. 요청 제한 또는 세션 만료 시 자동 재시도하지 않아.</p></aside>
+  </main>
+  <dialog id="slot-dialog" aria-labelledby="slot-room">
+    <button id="booking-close" type="button" class="dialog-close" aria-label="닫기">×</button>
+    <p class="eyebrow">BOOK THIS ROOM</p><h2 id="slot-room"></h2><p id="slot-time" class="slot-time"></p>
+    <p id="booking-account" class="dialog-note"></p>
+    <div id="booking-fields" hidden>
+      <label class="booking-label" for="booking-end">종료 시간</label><select id="booking-end"></select>
+      <label class="booking-label" for="booking-purpose">사용 목적</label><textarea id="booking-purpose" rows="3" maxlength="300" placeholder="예: 전공 과제 학습" required></textarea>
+      <p id="booking-summary" class="dialog-note"></p>
+      <label class="booking-ack"><input id="booking-ack" type="checkbox">호실·시간·사용 목적을 확인했어. 연결된 내 계정으로 예약할게.</label>
+      <button id="booking-confirm" type="button" class="primary" disabled>예약 확정</button>
+    </div>
+    <p id="booking-result" role="status" aria-live="polite"></p>
+    <div class="booking-links"><a id="reserve-link" target="_blank" rel="noopener noreferrer">공식 상세 화면 ↗</a><a href="https://library.daejin.ac.kr/seminar_use_history_list.mir" target="_blank" rel="noopener noreferrer">공식 예약 내역 ↗</a></div>
+    <p class="dialog-small">최종 확정 전에는 예약되지 않아. 도서관 Wi-Fi에 연결한 뒤 예약 시작 20분 이내에 공식 앱에서 ‘시작’을 눌러야 해.</p>
+  </dialog>
+  <footer>Daejin Tools <span>비공식 편의 도구 · 학교 또는 도서관의 공식 서비스가 아니야.</span></footer>
+</body>
+</html>

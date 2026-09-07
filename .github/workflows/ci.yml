@@ -42,10 +42,19 @@ jobs:
           cache-dependency-path: |
             pyproject.toml
             apps/sugang/requirements-web.txt
+            apps/library/requirements.txt
       - name: Install development and offline test dependencies
-        run: python -m pip install -e ".[dev]" -r apps/sugang/requirements-web.txt
+        run: python -m pip install -e ".[dev]" -r apps/sugang/requirements-web.txt -r apps/library/requirements.txt
       - name: Lint shared code and tests
-        run: python -m ruff check src tests
+        run: python -m ruff check src tests apps/library
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install browser test dependencies
+        run: npm ci
+      - name: Offline browser model and DOM tests
+        run: npm test
       - name: Offline regression tests (no service startup)
         run: python -m pytest -q -W error
       - name: Compile all Python sources without executing applications

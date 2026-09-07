@@ -590,7 +590,7 @@ class MainWindow(QMainWindow):
         top_layout.setSpacing(12)
 
         self.id_input = QLineEdit()
-        self.id_input.setPlaceholderText("학번 8자리 (20261236)")
+        self.id_input.setPlaceholderText("학번 8자리")
         self.id_input.setMaximumWidth(160)
 
         self.pw_input = QLineEdit()

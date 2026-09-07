@@ -25,3 +25,7 @@ vapid_private.pem.tmp
 .coverage
 htmlcov/
 .DS_Store
+node_modules/
+*session*.json
+*booking-state*.json
+*cookies*.json
