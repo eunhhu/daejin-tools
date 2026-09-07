@@ -3,7 +3,7 @@ name: Build and Release Multi-Platform Executables
 on:
   push:
     tags:
-      - "v*"
+      - "sugang-v*"
   workflow_dispatch:
 
 permissions:
@@ -13,6 +13,9 @@ jobs:
   build-windows:
     name: Build Windows (.exe)
     runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/sugang
 
     steps:
       - name: Checkout repository
@@ -23,6 +26,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
+          cache-dependency-path: apps/sugang/requirements.txt
 
       - name: Install dependencies
         run: |
@@ -42,12 +46,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-binary
-          path: dist/DaejinSugangSuite-Windows-x64.exe
+          path: apps/sugang/dist/DaejinSugangSuite-Windows-x64.exe
           if-no-files-found: error
 
   build-macos:
     name: Build macOS (.app / zip)
     runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: apps/sugang
 
     steps:
       - name: Checkout repository
@@ -58,6 +65,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
+          cache-dependency-path: apps/sugang/requirements.txt
 
       - name: Install dependencies
         run: |
@@ -77,7 +85,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-binary
-          path: dist/DaejinSugangSuite-macOS-AppleSilicon.zip
+          path: apps/sugang/dist/DaejinSugangSuite-macOS-AppleSilicon.zip
           if-no-files-found: error
 
   publish-release:

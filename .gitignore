@@ -11,3 +11,17 @@ db_cache.json
 push_subs.json
 vapid_keys.json
 vapid_private.pem
+vapid_private.pem.tmp
+.env.*
+!.env.example
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+/build/
+/dist/
+**/build/
+**/dist/
+.coverage
+htmlcov/
+.DS_Store

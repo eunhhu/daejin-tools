@@ -1,0 +1,7 @@
+# Dependencies for the existing observer and its offline regression tests.
+# Installation does not start the observer or enable network access.
+requests>=2.28.0
+beautifulsoup4>=4.11.0
+fastapi>=0.100.0
+uvicorn>=0.23.0
+pywebpush>=1.14.0
