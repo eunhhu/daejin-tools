@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="robots" content="noindex,nofollow">
+  <title>도서관 로그인 · Daejin Tools</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/booking.css">
+  <script type="module" src="/static/login.js"></script>
+</head>
+<body>
+  <header class="site-header"><span class="wordmark">Daejin<span>Tools</span><small>도서관</small></span><a class="external" href="https://library.daejin.ac.kr" target="_blank" rel="noopener noreferrer">도서관 공식 사이트 ↗</a></header>
+  <main class="login-main">
+    <section class="login-card" aria-labelledby="login-title">
+      <p class="eyebrow">LIBRARY ACCOUNT</p>
+      <h1 id="login-title">학교 계정으로 로그인</h1>
+      <p class="subtitle">각 브라우저는 서로 분리된 도서관 로그인과 예약 기록을 사용해.</p>
+      <form id="login-form" method="post" action="/api/login">
+        <label class="booking-label" for="school-account">학교 아이디</label>
+        <input id="school-account" name="account_id" autocomplete="username" maxlength="64" required>
+        <label class="booking-label" for="school-password">비밀번호</label>
+        <input id="school-password" name="password" type="password" autocomplete="current-password" maxlength="128" required>
+        <button id="login-submit" class="primary" type="submit">로그인</button>
+      </form>
+      <p id="login-status" role="alert" aria-live="polite"></p>
+      <p class="dialog-small">비밀번호는 도서관 로그인 요청에만 사용하며 저장하지 않아.</p>
+    </section>
+  </main>
+  <footer>Daejin Tools <span>비공식 편의 도구 · 학교 또는 도서관의 공식 서비스가 아니야.</span></footer>
+</body>
+</html>

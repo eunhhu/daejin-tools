@@ -63,3 +63,61 @@ test('clearing the date disables navigation, sends no request and recovers with 
  assert.equal(doc.querySelectorAll('#schedule button.cell.available').length,2);
  dom.window.close();
 });
+
+test('an expired app session returns the browser to login',async()=>{
+ const dom=new JSDOM(html,{url:'https://localhost/'}),doc=dom.window.document,navigations=[];
+ const fetcher=async()=>({status:401,ok:false,json:async()=>({detail:'도서관 로그인이 만료됐어. 다시 로그인해 줘.'})});
+
+ await boot(doc,fetcher,()=>({date:'2026-09-08',time:'10:00'}),url=>navigations.push(url));
+
+ assert.deepEqual(navigations,['/login']);
+ assert.equal(doc.querySelectorAll('#schedule button.cell.available').length,0);
+ dom.window.close();
+});
+
+test('an empty schedule 401 redirects before attempting JSON parsing',async()=>{
+ const dom=new JSDOM(html,{url:'https://localhost/'}),doc=dom.window.document,navigations=[];
+ const fetcher=async url=>url==='/api/config'?
+  {status:200,ok:true,json:async()=>({today:'2026-09-08',last_date:'2026-09-14'})}:
+  {status:401,ok:false,json:async()=>{throw new Error('synthetic JSON parse');}};
+
+ await boot(doc,fetcher,()=>({date:'2026-09-08',time:'10:00'}),url=>navigations.push(url));
+
+ assert.deepEqual(navigations,['/login']);
+ dom.window.close();
+});
+
+test('a non-JSON schedule error shows generic text',async()=>{
+ const dom=new JSDOM(html,{url:'https://localhost/'}),doc=dom.window.document;
+ const fetcher=async url=>url==='/api/config'?
+  {status:200,ok:true,json:async()=>({today:'2026-09-08',last_date:'2026-09-14'})}:
+  {status:502,ok:false,json:async()=>{throw new Error('synthetic JSON parse');}};
+
+ await boot(doc,fetcher,()=>({date:'2026-09-08',time:'10:00'}));
+
+ assert.equal(doc.querySelector('#message').textContent,'조회에 실패했어.');
+ dom.window.close();
+});
+
+test('header shows the masked current account and logout uses session csrf',async()=>{
+ const dom=new JSDOM(html,{url:'https://localhost/'}),doc=dom.window.document,calls=[],navigations=[];
+ const schedule={...fixture(),date:'2026-09-08',checked_at:'2026-09-08T10:00:00+09:00'};
+ const fetcher=async(url,init={})=>{
+  calls.push({url,init});
+  if(url==='/api/config') return {ok:true,status:200,json:async()=>({today:'2026-09-08',last_date:'2026-09-14',csrf_token:'session-csrf',booking_enabled:true,account_label:'20****34'})};
+  if(url==='/api/logout') return {ok:true,status:204,json:async()=>{throw new Error('empty response');}};
+  return {ok:true,status:200,json:async()=>schedule};
+ };
+
+ await boot(doc,fetcher,()=>({date:'2026-09-08',time:'10:00'}),url=>navigations.push(url));
+ assert.equal(doc.querySelector('#account-label').textContent,'20****34');
+ assert.equal(doc.querySelector('a[href="/manual"]'),null);
+ doc.querySelector('#logout').click();
+ await new Promise(resolve=>setImmediate(resolve));
+
+ const logout=calls.find(call=>call.url==='/api/logout');
+ assert.equal(logout.init.method,'POST');
+ assert.equal(logout.init.headers['X-Library-CSRF'],'session-csrf');
+ assert.deepEqual(navigations,['/login']);
+ dom.window.close();
+});

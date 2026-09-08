@@ -1,14 +1,18 @@
 import {filterRooms, cellState, timeAxis, kstNow} from './model.js';
 import {createBookingUI} from './booking-ui.js';
 
-export async function boot(doc = document, fetcher = globalThis.fetch, now = kstNow) {
+export async function boot(doc = document, fetcher = globalThis.fetch, now = kstNow,
+  navigate = url => doc.defaultView?.location.assign(url)) {
   const $ = selector => doc.querySelector(selector);
-  let snapshot = null, group = 'all', controller = null, serial = 0, configuration = {};
+  let snapshot = null, group = 'all', controller = null, serial = 0, configuration = {}, reauthenticating = false;
+  const reauthenticate = () => {
+    if (!reauthenticating) {reauthenticating=true;navigate('/login');}
+  };
   const booking = createBookingUI(doc, fetcher, () => configuration, () => {
     snapshot = null;$('#schedule thead').replaceChildren();$('#schedule tbody').replaceChildren();
-    $('#table-wrap').hidden=true;$('#summary').textContent='예약 처리 후 다시 조회해 줘.';
-    $('#status').textContent='자동 재조회 없음 · 필요할 때 새로고침';
-  });
+    $('#table-wrap').hidden=true;$('#summary').textContent='예약 후 시간표를 다시 불러와 줘.';
+    $('#status').textContent='새로고침하면 최신 시간을 확인할 수 있어.';
+  }, reauthenticate);
   const element = (tag, text, className) => {
     const node = doc.createElement(tag);
     if (text !== undefined) node.textContent = text;
@@ -18,6 +22,14 @@ export async function boot(doc = document, fetcher = globalThis.fetch, now = kst
   const setMessage = text => {
     $('#message').textContent = text;
     $('#message').hidden = !text;
+  };
+  const responseError = async (response, fallback) => {
+    try {
+      const data = await response.json();
+      return typeof data.detail === 'string' ? data.detail : fallback;
+    } catch {
+      return fallback;
+    }
   };
   const validDate = () => {
     const input = $('#date');
@@ -81,29 +93,30 @@ export async function boot(doc = document, fetcher = globalThis.fetch, now = kst
     $('#schedule thead').replaceChildren();$('#schedule tbody').replaceChildren();
     $('#loading').hidden = false; $('#table-wrap').hidden = true; $('#empty').hidden = true;
     $('#summary').textContent = '호실 확인 중';
-    $('#status').textContent = '조회 중 · 자동 갱신 없음';setMessage('');
+    $('#status').textContent = '시간표를 불러오는 중이야.';setMessage('');
     try {
       if (!validDate()) throw new Error('조회할 날짜를 선택해 줘.');
       const response = await fetcher(`/api/schedule?date=${encodeURIComponent(day)}`, {
         signal: controller.signal, cache: 'no-store', credentials: 'same-origin',
       });
+      if (response.status === 401) {reauthenticate();return;}
+      if (!response.ok) throw new Error(await responseError(response, '조회에 실패했어.'));
       const data = await response.json();
       if (ticket !== serial) return;
-      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : '조회에 실패했어.');
       if (data.date !== day || !Array.isArray(data.rooms)) throw new Error('조회 날짜와 응답이 일치하지 않아.');
       snapshot = data;
       const checked = new Intl.DateTimeFormat('ko-KR', {
         timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
       }).format(new Date(data.checked_at));
-      $('#status').textContent = `${checked} 확인 · ${data.stale ? '이전 결과' : data.cached ? '5분 캐시' : '새로 조회'} · 자동 갱신 없음`;
+      $('#status').textContent = `${checked} 확인 · ${data.stale ? '이전 결과' : data.cached ? '최근 결과' : '새로 확인'}`;
       const unknown = data.rooms.filter(room => room.state !== 'ok').length;
       setMessage(data.stale ? `이전 조회 결과야. 현재 예약 가능 여부는 다를 수 있어. ${data.warning || ''}` :
         unknown ? `${unknown}개 호실은 확인하지 못했어. 물음표로 구분했어.` : '');
       render();
     } catch (error) {
       if (ticket !== serial || error.name === 'AbortError') return;
-      setMessage(error.message || '연결에 실패했어. 직접 새로고침해 줘.');
-      $('#status').textContent = '조회 실패 · 자동 재시도 없음';
+      setMessage(error.message || '시간표를 불러오지 못했어. 다시 새로고침해 줘.');
+      $('#status').textContent = '시간표를 불러오지 못했어.';
       $('#summary').textContent = '확인되지 않은 상태';
     } finally {
       if (ticket === serial) {$('#loading').hidden = true; $('#refresh').disabled = false;}
@@ -128,14 +141,25 @@ export async function boot(doc = document, fetcher = globalThis.fetch, now = kst
   $('#prev').addEventListener('click', () => move(-1));
   $('#next').addEventListener('click', () => move(1));
   $('#today').addEventListener('click', () => {$('#date').value = $('#date').min;load();});
+  $('#logout').addEventListener('click', async () => {
+    $('#logout').disabled=true;
+    try {
+      const response=await fetcher('/api/logout',{method:'POST',credentials:'same-origin',cache:'no-store',
+        headers:{'X-Library-CSRF':configuration.csrf_token || ''}});
+      if (response.status===401 || response.ok) {reauthenticate();return;}
+      throw new Error(await responseError(response,'로그아웃하지 못했어.'));
+    } catch (error) {setMessage(error.message || '로그아웃하지 못했어.');$('#logout').disabled=false;}
+  });
   doc.defaultView?.addEventListener('pagehide', () => controller?.abort(), {once: true});
   dateButtons();
   // Exactly one initial load. No intervals, visibility refresh, focus refresh or prefetch.
   try {
-    const response = await fetcher('/api/config', {cache: 'no-store'});
+    const response = await fetcher('/api/config', {cache: 'no-store',credentials:'same-origin'});
+    if (response.status === 401) {reauthenticate();return;}
     if (!response.ok) throw new Error('조회 설정을 불러오지 못했어.');
     const config = await response.json();
     configuration = config;
+    $('#account-label').textContent=typeof config.account_label==='string'?config.account_label:'';
     $('#date').min = config.today;$('#date').max = config.last_date;$('#date').value = config.today;
     await load();
   } catch (error) {
