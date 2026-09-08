@@ -175,7 +175,7 @@ def test_closed_session_reference_fails_controlled_and_close_is_idempotent(tmp_p
         nonlocal called
         called = True
 
-    with pytest.raises(sessions.SessionExpired, match="로그인 세션이 종료됐어"):
+    with pytest.raises(sessions.SessionExpired, match="로그인 세션이 종료되었습니다"):
         browser_session.run(use_closed_client)
 
     browser_session.close()

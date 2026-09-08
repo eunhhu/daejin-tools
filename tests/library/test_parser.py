@@ -74,5 +74,5 @@ def test_closed_booking_notice_uses_visible_text_even_with_empty_or_disabled_val
 
 
 def test_login_html_is_not_an_empty_room_list():
-    with pytest.raises(parser().SessionExpired, match="도서관 로그인이 필요해. 다시 로그인해 줘"):
+    with pytest.raises(parser().SessionExpired, match="도서관 로그인이 필요합니다. 다시 로그인하세요"):
         parser().parse_rooms('<input id="home_login_password_login01" type="password">')

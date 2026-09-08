@@ -23,20 +23,24 @@ class LibrarySource:
             def read(path, data):
                 nonlocal requests
                 if path not in READ_PATHS:
-                    raise SourceError("허용되지 않은 조회 경로야.")
+                    raise SourceError("허용되지 않은 조회 경로입니다.")
                 if requests:
                     self.pause()
                 requests += 1
                 try:
                     response = client.post(ORIGIN + path, data=data)
                 except httpx.HTTPError as exc:
-                    raise SourceError("도서관 연결에 실패했어.") from exc
+                    raise SourceError("도서관 연결에 실패했습니다.") from exc
                 if response.is_redirect or response.status_code == 401:
-                    raise SessionExpired("도서관 로그인이 만료됐어. 다시 로그인해 줘.")
+                    raise SessionExpired(
+                        "도서관 로그인이 만료되었습니다. 다시 로그인이 필요합니다."
+                    )
                 if response.status_code in {403, 429}:
-                    raise SourceError("도서관에서 조회를 잠시 제한했어.")
+                    raise SourceError("도서관에서 조회를 일시적으로 제한했습니다.")
                 if response.status_code != 200 or len(response.content) > 2_000_000:
-                    raise SourceError("도서관 응답을 확인할 수 없어. 잠시 후 다시 시도해 줘.")
+                    raise SourceError(
+                        "도서관 응답을 확인할 수 없습니다. 잠시 후 다시 시도할 수 있습니다."
+                    )
                 return response.text
 
             rooms = parse_rooms(read('/seminar_seminar_list.mir', {

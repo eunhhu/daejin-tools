@@ -57,7 +57,7 @@ class BrowserSession:
     def run(self, operation, *args, **kwargs):
         with self.operation_lock:
             if self._closed:
-                raise SessionExpired("로그인 세션이 종료됐어. 다시 로그인해 줘.")
+                raise SessionExpired("로그인 세션이 종료되었습니다. 다시 로그인이 필요합니다.")
             return operation(*args, **kwargs)
 
     def close(self):

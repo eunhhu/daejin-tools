@@ -62,7 +62,7 @@ def test_login_page_verification_is_a_generic_invalid_credential_failure_and_clo
         follow_redirects=False,
     )
 
-    with pytest.raises(auth.InvalidCredentials, match="아이디 또는 비밀번호를 확인해 줘"):
+    with pytest.raises(auth.InvalidCredentials, match="아이디 또는 비밀번호가 올바르지 않습니다"):
         auth.LibraryAuthenticator(lambda: client).login("20261234", "wrong-password")
 
     assert client.is_closed is True
@@ -83,7 +83,7 @@ def test_non_login_html_without_a_valid_room_list_is_generic_invalid_credentials
         follow_redirects=False,
     )
 
-    with pytest.raises(auth.InvalidCredentials, match="아이디 또는 비밀번호를 확인해 줘"):
+    with pytest.raises(auth.InvalidCredentials, match="아이디 또는 비밀번호가 올바르지 않습니다"):
         auth.LibraryAuthenticator(lambda: client).login("20261234", "wrong-password")
 
     assert client.is_closed is True

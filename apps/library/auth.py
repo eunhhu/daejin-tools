@@ -20,13 +20,15 @@ class InvalidCredentials(Exception):
     """The supplied school account could not be authenticated."""
 
     def __init__(self):
-        super().__init__("아이디 또는 비밀번호를 확인해 줘.")
+        super().__init__("아이디 또는 비밀번호가 올바르지 않습니다.")
 
 
 class LoginRateLimited(Exception):
     def __init__(self, seconds):
         self.seconds = max(1, math.ceil(seconds))
-        super().__init__(f"로그인 시도가 너무 많아. {self.seconds}초 후 다시 시도해 줘.")
+        super().__init__(
+            f"로그인 시도 횟수가 많습니다. {self.seconds}초 후 다시 시도할 수 있습니다."
+        )
 
 
 class LoginAttemptLimiter:
@@ -74,7 +76,7 @@ class LibraryAuthenticator:
                 day = self.today()
                 page = client.get(ORIGIN + LOGIN_PAGE, follow_redirects=False)
                 if page.status_code != 200 or len(page.content) > 2_000_000:
-                    raise SourceError("로그인 페이지를 불러오지 못했어.")
+                    raise SourceError("로그인 페이지를 불러올 수 없습니다.")
                 client.post(
                     ORIGIN + LOGIN_PROCESS,
                     data={
@@ -98,11 +100,11 @@ class LibraryAuthenticator:
                     follow_redirects=False,
                 )
             except httpx.HTTPError as exc:
-                raise SourceError("도서관 연결에 실패했어.") from exc
+                raise SourceError("도서관 연결에 실패했습니다.") from exc
             if response.is_redirect or response.status_code == 401:
                 raise InvalidCredentials
             if response.status_code != 200 or len(response.content) > 2_000_000:
-                raise SourceError("로그인 확인 요청을 처리하지 못했어.")
+                raise SourceError("로그인 확인 요청을 처리할 수 없습니다.")
             try:
                 parse_rooms(response.text)
             except SessionExpired as exc:

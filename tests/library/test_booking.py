@@ -187,7 +187,7 @@ def test_booking_preview_names_only_the_masked_current_account(tmp_path):
 
     preview = b.prepare(DAY, "S01", "17:00")
 
-    assert preview["account_notice"] == "20****34 계정으로 예약해."
+    assert preview["account_notice"] == "예약에 사용할 로그인 계정: 20****34"
     assert "20261234" not in preview["account_notice"]
     assert "운영자" not in preview["account_notice"]
 

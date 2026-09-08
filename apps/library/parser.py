@@ -18,7 +18,7 @@ def document(html):
     if soup.select_one('input[type="password"]') or re.search(
         r"(?:location(?:\.href)?\s*=|location\.replace\()\s*['\"][^'\"]*home_login", html
     ):
-        raise SessionExpired("도서관 로그인이 필요해. 다시 로그인해 줘.")
+        raise SessionExpired("도서관 로그인이 필요합니다. 다시 로그인하세요.")
     return soup
 
 
@@ -37,13 +37,13 @@ def parse_rooms(html):
             continue
         group, code, name, minimum, capacity = match.groups()
         if not (code.startswith(group) and 1 <= int(minimum) <= int(capacity) <= 999):
-            raise SourceError("호실 정보 형식이 변경됐어.")
+            raise SourceError("호실 정보 형식이 변경되었습니다.")
         room = dict(code=code, group=group, name=name, minimum=int(minimum), capacity=int(capacity))
         if code in rooms and rooms[code] != room:
-            raise SourceError("중복된 호실 정보가 일치하지 않아.")
+            raise SourceError("중복된 호실 정보가 일치하지 않습니다.")
         rooms[code] = room
     if not rooms or len(rooms) > 30:
-        raise SourceError("예약실 목록을 확인할 수 없어. 원본 페이지를 확인해 줘.")
+        raise SourceError("예약실 목록을 확인할 수 없습니다. 원본 페이지 확인이 필요합니다.")
     return list(rooms.values())
 
 
@@ -56,11 +56,11 @@ def parse_times(html, expected_day=None):
         )
         expected = (expected_day.year, expected_day.month, expected_day.day)
         if len(dates) != 1 or tuple(map(int, dates[0])) != expected:
-            raise SourceError("요청한 날짜와 원본 화면의 날짜가 일치하지 않아.")
+            raise SourceError("요청 날짜와 원본 화면의 날짜가 일치하지 않습니다.")
     select = soup.select_one('#start_time')
     step = soup.select_one('#service_term')
     if select is None or step is None or step.get('value') not in {'10', '15', '20', '30', '60'}:
-        raise SourceError("선택 가능한 시간을 확인할 수 없어.")
+        raise SourceError("선택 가능한 시간을 확인할 수 없습니다.")
     starts = set()
     options = select.select('option')
     if any(option.get_text(" ", strip=True) == "예약이 마감되었습니다" for option in options):
@@ -71,6 +71,6 @@ def parse_times(html, expected_day=None):
             if not value or option.has_attr('disabled'):
                 continue
             if not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d', value):
-                raise SourceError("시간 표시 형식이 변경됐어.")
+                raise SourceError("시간 표시 형식이 변경되었습니다.")
             starts.add(value)
     return {'starts': sorted(starts), 'step_minutes': int(step['value'])}

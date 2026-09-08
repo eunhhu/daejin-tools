@@ -89,6 +89,6 @@ test('booking shows generic text for a non-JSON error response',async()=>{
 
  await ui.open({code:'S01',name:'테스트실'},'2026-09-08','17:00');
 
- assert.equal(doc.querySelector('#booking-result').textContent,'예약 요청을 처리하지 못했어.');
+ assert.equal(doc.querySelector('#booking-result').textContent,'예약 요청을 처리할 수 없습니다.');
  dom.window.close();
 });

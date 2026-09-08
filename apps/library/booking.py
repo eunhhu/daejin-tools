@@ -40,7 +40,7 @@ def booking_history(html, room, day, start, end):
                 "date": day,
                 "start": start,
                 "end": end,
-                "message": "공식 예약 내역에서 확인했어.",
+                "message": "공식 예약 내역에서 확인되었습니다.",
             }
     return None
 
@@ -78,7 +78,7 @@ class BookingService:
                 raise ValueError
         except (ValueError, TypeError):
             raise SourceError(
-                "오늘부터 7일 이내의 아직 지나지 않은 시작 시간을 선택해 줘."
+                "오늘부터 7일 이내이며 아직 지나지 않은 시작 시간을 선택하세요."
             ) from None
 
     @staticmethod
@@ -93,16 +93,16 @@ class BookingService:
             HISTORY_PATH,
             "/seminar_resv_check.mir",
         }:
-            raise SourceError("허용되지 않은 예약 준비 경로야.")
+            raise SourceError("허용되지 않은 예약 준비 경로입니다.")
         self.pause()
         try:
             response = client.post(ORIGIN + path, data=data or {"sloc_code": "DJUL"})
         except httpx.HTTPError as exc:
-            raise SourceError("학교 연결에 실패했어.") from exc
+            raise SourceError("학교 연결에 실패했습니다.") from exc
         if response.is_redirect or response.status_code == 401:
-            raise SessionExpired("도서관 로그인이 만료됐어. 다시 로그인해 줘.")
+            raise SessionExpired("도서관 로그인이 만료되었습니다. 다시 로그인이 필요합니다.")
         if response.status_code != 200 or len(response.content) > 2_000_000:
-            raise SourceError("학교가 요청을 처리하지 못했어. 추가 요청을 중단했어.")
+            raise SourceError("학교에서 요청을 처리할 수 없습니다. 추가 요청이 중단되었습니다.")
         document(response.text)  # Also reject a login page returned as HTTP 200.
         return response.text
 
@@ -114,13 +114,16 @@ class BookingService:
             while self.previews and now - self.previews[0] >= 3600:
                 self.previews.popleft()
             if len(self.previews) >= 12:
-                raise SourceError("예약 준비 조회의 시간당 한도에 도달했어. 잠시 후 시도해 줘.")
+                raise SourceError(
+                    "예약 준비 조회의 시간당 한도에 도달했습니다. "
+                    "잠시 후 다시 시도할 수 있습니다."
+                )
             cached = self.schedule.cache.get(day)
             room = (
                 next((r for r in cached[1]["rooms"] if r["code"] == code), None) if cached else None
             )
             if not room:
-                raise SourceError("시간표를 먼저 조회하고 표시된 호실을 선택해 줘.")
+                raise SourceError("시간표를 먼저 조회한 후 표시된 호실을 선택하세요.")
             self.previews.append(now)
             with self.client_factory() as client:
                 identity = self._identity(client)
@@ -155,10 +158,11 @@ class BookingService:
                     or not soup.select_one("#use_purpose")
                 ):
                     raise SourceError(
-                        "추가 참여자 등 별도 입력이 필요한 양식이야. 공식 화면에서 예약해 줘."
+                        "추가 참여자 등 별도 입력이 필요한 양식입니다. "
+                        "공식 화면에서 예약해야 합니다."
                     )
                 if start not in times["starts"]:
-                    raise SourceError("선택한 시작 시간이 더 이상 가능하지 않아.")
+                    raise SourceError("선택한 시작 시간은 더 이상 예약할 수 없습니다.")
                 html = self._read(
                     client,
                     "/seminar_end_time_list.mir",
@@ -195,7 +199,7 @@ class BookingService:
                     <= 10800
                 ]
                 if not ends:
-                    raise SourceError("선택 가능한 종료 시간이 없어. 다른 시작 시간을 골라 줘.")
+                    raise SourceError("선택 가능한 종료 시간이 없습니다. 다른 시작 시간을 선택하세요.")
                 rental = "".join(
                     f"{e.get('value', '')}^N▒"
                     for e in soup.select("input[type=checkbox][id^=rental_item]")
@@ -218,9 +222,9 @@ class BookingService:
                     "ends": ends,
                     "expires_in_seconds": 120,
                     "account_notice": (
-                        f"{self.account_label} 계정으로 예약해."
+                        f"예약에 사용할 로그인 계정: {self.account_label}"
                         if self.account_label
-                        else "현재 계정으로 예약해."
+                        else "현재 로그인 계정으로 예약됩니다."
                     ),
                 }
 
@@ -244,7 +248,8 @@ class BookingService:
             return value
         except (OSError, ValueError) as exc:
             raise SourceError(
-                "중복 예약 방지 기록을 읽을 수 없어. 공식 내역을 확인한 뒤 다시 시도해 줘."
+                "중복 예약 방지 기록을 읽을 수 없습니다. "
+                "공식 내역 확인 후 다시 시도해야 합니다."
             ) from exc
 
     def _save(self, value):
@@ -264,7 +269,8 @@ class BookingService:
             os.replace(tmp, path)
         except OSError as exc:
             raise SourceError(
-                "중복 예약 방지 기록을 저장하지 못했어. 내역 확인 전 다시 예약하지 마."
+                "중복 예약 방지 기록을 저장할 수 없습니다. "
+                "공식 내역 확인 전에는 다시 예약하지 마세요."
             ) from exc
         finally:
             if tmp and tmp.exists():
@@ -272,29 +278,33 @@ class BookingService:
 
     def confirm(self, ticket, end, purpose, confirmed):
         if confirmed is not True:
-            raise SourceError("최종 예약 확인이 필요해.")
+            raise SourceError("최종 예약 확인이 필요합니다.")
         if not isinstance(purpose, str):
-            raise SourceError("사용 목적은 300자 이하로 입력해 줘.")
+            raise SourceError("사용 목적은 300자 이하로 입력해야 합니다.")
         purpose = purpose.strip()
         if len(purpose) > 300:
-            raise SourceError("사용 목적은 300자 이하로 입력해 줘.")
+            raise SourceError("사용 목적은 300자 이하로 입력해야 합니다.")
         with self.schedule.lock:
             q = self.tickets.get(ticket)
             if not q or q["expires"] <= self.now().timestamp():
-                raise SourceError("예약 준비가 만료됐어. 시간 칸을 다시 선택해 줘.")
+                raise SourceError("예약 준비가 만료되었습니다. 시간 칸을 다시 선택하세요.")
             if end not in q["ends"]:
-                raise SourceError("공식 목록에 있는 종료 시간만 선택할 수 있어.")
+                raise SourceError("공식 목록의 종료 시간만 선택할 수 있습니다.")
             self._validate_start(q["day"], q["start"])
             now = self.now().timestamp()
             while self.confirmations and now - self.confirmations[0] >= 3600:
                 self.confirmations.popleft()
             if len(self.confirmations) >= 12:
-                raise SourceError("예약 확인 요청이 너무 많아. 잠시 후 다시 시도해 줘.")
+                raise SourceError(
+                    "예약 확인 요청이 너무 많습니다. 잠시 후 다시 시도할 수 있습니다."
+                )
             self.confirmations.append(now)
             key = "|".join((q["day"], q["room"]["code"], q["start"], end))
             with self.client_factory() as client:
                 if self._identity(client) != q["identity"]:
-                    raise SessionExpired("로그인 세션이 바뀌었어. 시간 칸부터 다시 선택해 줘.")
+                    raise SessionExpired(
+                        "로그인 세션이 변경되었습니다. 시간 칸을 다시 선택해야 합니다."
+                    )
                 journal = self._journal()
                 prior = journal.get(key)
                 before = booking_history(
@@ -311,7 +321,10 @@ class BookingService:
                 if prior or uncertain_day:
                     return {
                         "status": "unknown",
-                        "message": "당일 이전 제출 결과가 미확인이야. 공식 내역 확인 전 새 예약을 제출하지 않아.",
+                        "message": (
+                            "당일 이전 제출 결과를 확인할 수 없습니다. "
+                            "공식 내역 확인 전에는 새 예약을 제출하지 마세요."
+                        ),
                     }
                 payload = {
                     "sloc_code": "DJUL",
@@ -335,7 +348,10 @@ class BookingService:
                 self._save(journal)  # Persist BEFORE the single mutation attempt.
                 result = {
                     "status": "unknown",
-                    "message": "제출 결과를 확정하지 못했어. 중복 제출하지 말고 공식 예약 내역을 확인해 줘.",
+                    "message": (
+                        "제출 결과를 확정할 수 없습니다. "
+                        "중복 제출하지 말고 공식 예약 내역을 확인하세요."
+                    ),
                 }
                 self.pause()
                 try:

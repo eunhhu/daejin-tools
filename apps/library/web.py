@@ -90,7 +90,7 @@ def check_csrf(request, token, expected_origin=None):
         or request.headers.get("origin") != origin
         or not hmac.compare_digest(supplied.encode(), token.encode())
     ):
-        raise HTTPException(403, "이 페이지에서 다시 시도해 줘.")
+        raise HTTPException(403, "현재 페이지에서 다시 시도해야 합니다.")
 
 
 def _public_origin(required=False):
@@ -152,7 +152,7 @@ def create_app(authenticator=None, session_store=None, login_limiter=None, accou
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
         if request.url.path == "/api/login":
-            return JSONResponse({"detail": "로그인 정보를 확인해 줘."}, status_code=422)
+            return JSONResponse({"detail": "로그인 정보를 확인하세요."}, status_code=422)
         return await request_validation_exception_handler(request, exc)
 
     allowed_hosts = ["127.0.0.1", "localhost", "[::1]"]
@@ -210,7 +210,7 @@ def create_app(authenticator=None, session_store=None, login_limiter=None, accou
             "/api/booking/confirm",
         }:
             if not browser_session:
-                preflight_error = HTTPException(401, "로그인이 필요해.")
+                preflight_error = HTTPException(401, "로그인이 필요합니다.")
             else:
                 try:
                     check_csrf(request, browser_session.csrf_token, expected_origin(request))
@@ -247,7 +247,7 @@ def create_app(authenticator=None, session_store=None, login_limiter=None, accou
     def require_session(request):
         browser_session = request.state.library_session
         if not browser_session:
-            raise HTTPException(401, "로그인이 필요해.")
+            raise HTTPException(401, "로그인이 필요합니다.")
         return browser_session
 
     def expire_session(request, browser_session):
@@ -282,7 +282,7 @@ def create_app(authenticator=None, session_store=None, login_limiter=None, accou
         check_csrf(request, csrf_token, expected_origin(request))
         account_id = body.account_id.strip()
         if not account_id:
-            raise HTTPException(401, "아이디 또는 비밀번호를 확인해 줘.")
+            raise HTTPException(401, "아이디 또는 비밀번호가 올바르지 않습니다.")
         peer = request.client.host if request.client else "unknown"
         try:
             login_limiter.check(peer)
@@ -303,13 +303,17 @@ def create_app(authenticator=None, session_store=None, login_limiter=None, accou
         except InvalidCredentials as exc:
             raise HTTPException(401, str(exc)) from exc
         except (httpx.HTTPError, SourceError) as exc:
-            raise HTTPException(502, "로그인할 수 없어. 잠시 후 다시 시도해 줘.") from exc
+            raise HTTPException(
+                502, "로그인할 수 없습니다. 잠시 후 다시 시도할 수 있습니다."
+            ) from exc
         if request.state.library_session:
             session_store.remove(request.state.library_session.token)
         try:
             browser_session = session_store.create(account_id, client)
         except SessionLimit as exc:
-            raise HTTPException(503, "현재 로그인 사용자가 많아. 잠시 후 다시 시도해 줘.") from exc
+            raise HTTPException(
+                503, "현재 로그인 사용자가 많습니다. 잠시 후 다시 시도할 수 있습니다."
+            ) from exc
         request.state.library_session = browser_session
         request.state.clear_library_session = False
         response = JSONResponse(
@@ -350,7 +354,7 @@ def create_app(authenticator=None, session_store=None, login_limiter=None, accou
     def schedule(request: Request, date: str | None = None):
         browser_session = require_session(request)
         if date is None:
-            raise HTTPException(422, "날짜 형식은 YYYY-MM-DD여야 해.")
+            raise HTTPException(422, "날짜 형식은 YYYY-MM-DD여야 합니다.")
         try:
             return browser_session.run(browser_session.schedule.get, date)
         except ValueError as exc:
@@ -359,7 +363,9 @@ def create_app(authenticator=None, session_store=None, login_limiter=None, accou
             raise HTTPException(429, str(exc), headers={"Retry-After": str(exc.seconds)}) from exc
         except SessionExpired as exc:
             expire_session(request, browser_session)
-            raise HTTPException(401, "도서관 로그인이 만료됐어. 다시 로그인해 줘.") from exc
+            raise HTTPException(
+                401, "도서관 로그인이 만료되었습니다. 다시 로그인이 필요합니다."
+            ) from exc
         except SourceError as exc:
             raise HTTPException(502, str(exc)) from exc
 
@@ -367,12 +373,14 @@ def create_app(authenticator=None, session_store=None, login_limiter=None, accou
         browser_session = require_session(request)
         check_csrf(request, browser_session.csrf_token, expected_origin(request))
         if browser_session.bookings is None:
-            raise HTTPException(503, "예약 기능을 사용할 수 없어.")
+            raise HTTPException(503, "예약 기능을 사용할 수 없습니다.")
         try:
             return browser_session.run(getattr(browser_session.bookings, method), **values)
         except SessionExpired as exc:
             expire_session(request, browser_session)
-            raise HTTPException(401, "도서관 로그인이 만료됐어. 다시 로그인해 줘.") from exc
+            raise HTTPException(
+                401, "도서관 로그인이 만료되었습니다. 다시 로그인이 필요합니다."
+            ) from exc
         except SourceError as exc:
             raise HTTPException(409, str(exc)) from exc
 
