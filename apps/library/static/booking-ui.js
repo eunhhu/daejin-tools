@@ -1,25 +1,57 @@
 import {detailURL} from './model.js';
 
-export function createBookingUI(doc, fetcher, config, invalidate) {
+export function createBookingUI(doc, fetcher, config, invalidate, reauthenticate = () => {}) {
   const $ = sel => doc.querySelector(sel), dialog = $('#slot-dialog');
-  let quote = null, busy = false, locked = false, serial = 0, expires = 0;
+  let quote = null, busy = false, locked = false, serial = 0, expires = 0, selectedEnd = '';
+  const duration = (start, end) => {
+    const [startHour,startMinute]=start.split(':').map(Number),[endHour,endMinute]=end.split(':').map(Number);
+    const minutes=endHour*60+endMinute-startHour*60-startMinute;
+    const hours=Math.floor(minutes/60), remainder=minutes%60;
+    return `${hours ? `${hours}시간${remainder ? ' ' : ''}` : ''}${remainder ? `${remainder}분` : ''}`;
+  };
+  const selectEnd = (value, focus = false) => {
+    if (busy || locked || !quote || !quote.ends.includes(value)) return;
+    selectedEnd=value;
+    for (const button of doc.querySelectorAll('#booking-end-options button')) {
+      button.setAttribute('aria-pressed',String(button.dataset.end===selectedEnd));
+      if (focus && button.dataset.end===selectedEnd) button.focus();
+    }
+    sync();
+  };
   const sync = () => {
-    const end = $('#booking-end').value, purpose = $('#booking-purpose').value.trim();
-    $('#booking-confirm').disabled = busy || locked || !quote || !quote.ends.includes(end) ||
-      !purpose || purpose.length > 300 || !$('#booking-ack').checked;
+    const purpose = $('#booking-purpose').value.trim();
+    $('#booking-confirm').disabled = busy || locked || !quote || !quote.ends.includes(selectedEnd) ||
+      purpose.length > 300 || !$('#booking-ack').checked;
     $('#booking-close').disabled = busy;
-    for (const id of ['booking-end','booking-purpose','booking-ack']) $('#'+id).disabled = busy || locked;
-    $('#booking-summary').textContent = quote && end ? `${quote.date} · ${quote.start}–${end} · 한국 시간` : '종료 시간을 선택해 줘.';
+    for (const id of ['booking-purpose','booking-ack']) $('#'+id).disabled = busy || locked;
+    for (const button of doc.querySelectorAll('#booking-end-options button')) button.disabled = busy || locked;
+    $('#booking-summary').textContent = quote && selectedEnd ?
+      `${quote.date} · ${quote.start}–${selectedEnd} · ${duration(quote.start,selectedEnd)} · 한국 시간` :
+      '종료 시간을 선택해 줘.';
   };
   const post = async (path, body) => {
     const response = await fetcher(path, {method:'POST',credentials:'same-origin',cache:'no-store',
       signal:AbortSignal.timeout(90000), headers:{'Content-Type':'application/json','X-Library-CSRF':config().csrf_token || ''},
       body:JSON.stringify(body)});
-    const data = await response.json();
-    if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : '예약 요청을 처리하지 못했어.');
-    return data;
+    if (response.status === 401) {
+      reauthenticate();
+      throw new Error('도서관 로그인이 만료됐어. 다시 로그인해 줘.');
+    }
+    if (!response.ok) {
+      let message = '예약 요청을 처리하지 못했어.';
+      try {
+        const data = await response.json();
+        if (typeof data.detail === 'string') message = data.detail;
+      } catch {}
+      throw new Error(message);
+    }
+    try {
+      return await response.json();
+    } catch {
+      throw new Error('예약 요청을 처리하지 못했어.');
+    }
   };
-  for (const id of ['booking-end','booking-purpose','booking-ack']) {
+  for (const id of ['booking-purpose','booking-ack']) {
     $('#'+id).addEventListener('input',sync);$('#'+id).addEventListener('change',sync);
   }
   $('#booking-close').addEventListener('click',()=>{if (!busy) {serial++;quote=null;dialog.close();}});
@@ -27,7 +59,7 @@ export function createBookingUI(doc, fetcher, config, invalidate) {
   $('#booking-confirm').addEventListener('click',async()=>{
     sync();if ($('#booking-confirm').disabled) return;
     if (Date.now() >= expires) {locked=true;$('#booking-result').textContent='예약 준비가 만료됐어. 닫고 시간 칸을 다시 선택해 줘.';sync();return;}
-    const payload = {ticket:quote.ticket,end:$('#booking-end').value,purpose:$('#booking-purpose').value.trim(),confirmed:true};
+    const payload = {ticket:quote.ticket,end:selectedEnd,purpose:$('#booking-purpose').value.trim(),confirmed:true};
     busy=true;sync();$('#booking-result').textContent='예약 요청 중이야. 중복 제출하지 않고 내역까지 확인할게.';
     try {
       const result = await post('/api/booking/confirm',payload);
@@ -49,7 +81,7 @@ export function createBookingUI(doc, fetcher, config, invalidate) {
   return {async open(room, day, start) {
     if (busy) return;
     const ticket = ++serial;
-    quote=null;locked=false;$('#booking-fields').hidden=true;$('#booking-result').textContent='선택한 시작 시간의 종료 시간을 확인 중이야. 아직 예약하지 않아.';
+    quote=null;locked=false;selectedEnd='';$('#booking-fields').hidden=true;$('#booking-result').textContent='선택한 시작 시간의 종료 시간을 확인 중이야.';
     $('#slot-room').textContent=room.name;$('#slot-time').textContent=`${day} · ${start} 시작`;
     $('#reserve-link').href=detailURL(room,day);$('#booking-account').textContent='';
     $('#booking-purpose').value='';$('#booking-ack').checked=false;sync();
@@ -60,10 +92,23 @@ export function createBookingUI(doc, fetcher, config, invalidate) {
       if (serial !== ticket) return;
       if (data.date !== day || data.start !== start || !Array.isArray(data.ends) || !data.ticket) throw new Error('예약 준비 응답을 확인할 수 없어.');
       quote=data;expires=Date.now()+data.expires_in_seconds*1000;
-      $('#booking-end').replaceChildren();
-      for (const value of ['',...data.ends]) {
-        const option=doc.createElement('option');option.value=value;option.textContent=value || '종료 시간 선택';
-        $('#booking-end').append(option);
+      const options=$('#booking-end-options');options.replaceChildren();
+      for (const [index,value] of data.ends.entries()) {
+        const button=doc.createElement('button');button.type='button';button.className='end-time-option';button.dataset.end=value;
+        button.setAttribute('aria-pressed','false');button.setAttribute('aria-label',`${value} 종료, ${duration(start,value)}`);
+        const time=doc.createElement('strong');time.textContent=value;
+        const length=doc.createElement('span');length.textContent=duration(start,value);
+        button.append(time,length);
+        button.addEventListener('click',()=>selectEnd(value));
+        button.addEventListener('keydown',event=>{
+          if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(event.key)) return;
+          event.preventDefault();
+          const last=data.ends.length-1;
+          const next=event.key==='Home'?0:event.key==='End'?last:
+            ['ArrowRight','ArrowDown'].includes(event.key)?(index+1)%data.ends.length:(index+last)%data.ends.length;
+          selectEnd(data.ends[next],true);
+        });
+        options.append(button);
       }
       $('#booking-account').textContent=data.account_notice;$('#booking-fields').hidden=false;
       $('#booking-result').textContent='아직 예약 전이야. 내용을 확인한 뒤 예약 확정을 눌러 줘.';sync();

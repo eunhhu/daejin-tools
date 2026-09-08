@@ -1,26 +1,27 @@
 """Bounded request-time cache. No background tasks or automatic refresh."""
 
 import copy
+import math
 import time
 from collections import deque
 from datetime import date, datetime
 from threading import Lock
 
-from .parser import SourceError
+from .parser import SessionExpired, SourceError
 from .source import KST
 
 
 class Cooldown(SourceError):
-    def __init__(self, seconds, message='학교 요청을 줄이기 위해 잠시 대기 중이야.'):
+    def __init__(self, seconds, message="잠시 후 다시 조회해 줘."):
         super().__init__(message)
-        self.seconds = max(1, int(seconds))
+        self.seconds = max(1, math.ceil(seconds))
 
 
 class ScheduleService:
-    TTL = 300
-    STALE_LIMIT = 1800
-    MIN_BATCH_GAP = 30
-    BATCHES_PER_HOUR = 6
+    TTL = 60
+    STALE_LIMIT = 300
+    BATCHES_PER_HOUR = 60
+    FAILURE_COOLDOWN = 15
 
     def __init__(self, source, clock=time.monotonic, today=lambda: datetime.now(KST).date()):
         self.source = source
@@ -58,20 +59,23 @@ class ScheduleService:
             while self.batches and now - self.batches[0] >= 3600:
                 self.batches.popleft()
             wait = max(0, self.cool_until - now)
-            if self.batches:
-                wait = max(wait, self.MIN_BATCH_GAP - (now - self.batches[-1]))
             if len(self.batches) >= self.BATCHES_PER_HOUR:
                 wait = max(wait, 3600 - (now - self.batches[0]))
             if wait > 0:
-                message = self.last_error or '학교 요청 한도 보호 중이야. 잠시 후 직접 새로고침해 줘.'
+                reason = (self.last_error if self.cool_until > now else
+                          '시간표 조회 한도에 도달했어.')
+                message = f'{reason} {math.ceil(wait)}초 후 다시 조회해 줘.'
                 if cached:
                     return result(cached, hit=True, warning=message)
                 raise Cooldown(wait, message)
             self.batches.append(now)
             try:
                 data = self.source.fetch(day)
+            except SessionExpired:
+                self.cache.clear()
+                raise
             except SourceError as exc:
-                self.cool_until = self.clock() + self.TTL
+                self.cool_until = self.clock() + self.FAILURE_COOLDOWN
                 self.last_error = str(exc)
                 if cached:
                     return result(cached, hit=True, warning=str(exc))

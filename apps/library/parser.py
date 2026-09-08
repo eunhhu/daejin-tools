@@ -10,7 +10,7 @@ class SourceError(Exception):
 
 
 class SessionExpired(SourceError):
-    """The operator must renew their library session manually."""
+    """The current browser must establish a new library login."""
 
 
 def document(html):
@@ -18,7 +18,7 @@ def document(html):
     if soup.select_one('input[type="password"]') or re.search(
         r"(?:location(?:\.href)?\s*=|location\.replace\()\s*['\"][^'\"]*home_login", html
     ):
-        raise SessionExpired("도서관 로그인이 필요해. 운영자의 로그인 세션을 갱신해야 해.")
+        raise SessionExpired("도서관 로그인이 필요해. 다시 로그인해 줘.")
     return soup
 
 
@@ -62,8 +62,11 @@ def parse_times(html, expected_day=None):
     if select is None or step is None or step.get('value') not in {'10', '15', '20', '30', '60'}:
         raise SourceError("선택 가능한 시간을 확인할 수 없어.")
     starts = set()
+    options = select.select('option')
+    if any(option.get_text(" ", strip=True) == "예약이 마감되었습니다" for option in options):
+        return {'starts': [], 'step_minutes': int(step['value'])}
     if not select.has_attr('disabled'):
-        for option in select.select('option'):
+        for option in options:
             value = option.get('value', option.get_text()).strip()
             if not value or option.has_attr('disabled'):
                 continue

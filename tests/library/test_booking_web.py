@@ -1,4 +1,5 @@
 import importlib
+from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
@@ -31,8 +32,35 @@ def test_mutation_requires_same_origin_and_page_csrf_token():
     web.check_csrf(req("http://localhost:18764", "synthetic"), "synthetic")
 
 
-def test_booking_routes_and_manual_are_exposed_without_school_requests():
+def test_booking_routes_remain_but_the_site_manual_is_removed():
     web = importlib.import_module("apps.library.web")
-    app = web.create_app(service=object(), bookings=object())
+    app = web.create_app(authenticator=object(), session_store=object())
     paths = {r.path for r in app.routes}
-    assert {"/api/booking/prepare", "/api/booking/confirm", "/manual"} <= paths
+    assert {"/api/booking/prepare", "/api/booking/confirm", "/api/logout"} <= paths
+    assert "/manual" not in paths
+    assert not Path("apps/library/static/manual.html").exists()
+
+
+def test_booking_confirmation_treats_an_omitted_optional_purpose_as_blank():
+    web = importlib.import_module("apps.library.web")
+
+    request = web.ConfirmRequest(
+        ticket="synthetic-ticket-123456789",
+        end="17:30",
+        confirmed=True,
+    )
+
+    assert request.purpose == ""
+
+
+def test_booking_confirmation_trims_purpose_before_validating_length():
+    web = importlib.import_module("apps.library.web")
+
+    request = web.ConfirmRequest(
+        ticket="synthetic-ticket-123456789",
+        end="17:30",
+        purpose="학" * 300 + "   ",
+        confirmed=True,
+    )
+
+    assert request.purpose == "학" * 300

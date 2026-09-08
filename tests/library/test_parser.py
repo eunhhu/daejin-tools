@@ -59,6 +59,20 @@ def test_server_echoed_date_must_match_requested_date():
     assert parser().parse_times(html, expected_day=date(2026, 9, 7))['starts'] == ['17:00']
 
 
+def test_observed_closed_booking_notice_is_known_unavailable():
+    html = '''<input id="service_term" value="30"><select id="start_time">
+    <option>예약이 마감되었습니다</option></select>'''
+    assert parser().parse_times(html) == {"starts": [], "step_minutes": 30}
+
+
+@pytest.mark.parametrize("attributes", ['value=""', "disabled", 'value="" disabled'])
+def test_closed_booking_notice_uses_visible_text_even_with_empty_or_disabled_value(attributes):
+    html = f'''<input id="service_term" value="30"><select id="start_time">
+    <option {attributes}>예약이 마감되었습니다</option>
+    <option value="not-a-time">stale option</option></select>'''
+    assert parser().parse_times(html) == {"starts": [], "step_minutes": 30}
+
+
 def test_login_html_is_not_an_empty_room_list():
-    with pytest.raises(parser().SessionExpired):
+    with pytest.raises(parser().SessionExpired, match="도서관 로그인이 필요해. 다시 로그인해 줘"):
         parser().parse_rooms('<input id="home_login_password_login01" type="password">')

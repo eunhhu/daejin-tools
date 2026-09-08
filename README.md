@@ -27,7 +27,7 @@ daejin-tools/
 └── .github/workflows/       # 오프라인 테스트 및 빌드 CI
 ```
 
-- **도서관 시간표:** [apps/library](apps/library/README.md) — 방문 시에만 조회, 자동 갱신 없음
+- **도서관 시간표:** [apps/library](apps/library/README.md) — 개별 학교 계정 로그인과 세션별 시간표·예약
 - **기존 수강 코드:** [apps/sugang](apps/sugang/README.md)
 - **새 기능 추가:** [기여 안내](CONTRIBUTING.md) · [아키텍처](docs/architecture.md)
 - **기존 경로에서 이전:** [마이그레이션 안내](docs/migration.md)

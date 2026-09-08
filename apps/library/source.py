@@ -1,11 +1,6 @@
-"""On-demand read-only library adapter; no login, timers, retries or reservations."""
+"""Read-only library adapter for one authenticated in-memory client."""
 
-import json
-import os
-import stat
-import time
 from datetime import datetime
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -15,32 +10,9 @@ from .parser import SessionExpired, SourceError, parse_rooms, parse_times
 ORIGIN = "https://library.daejin.ac.kr"
 READ_PATHS = frozenset({"/seminar_seminar_list.mir", "/seminar_resv.mir"})
 KST = ZoneInfo("Asia/Seoul")
-
-
-def session_client(path):
-    """Read a narrowly scoped CDP-cookie export only when a visitor requests data."""
-    try:
-        path = Path(path)
-        if os.name == "posix" and stat.S_IMODE(path.stat().st_mode) & 0o077:
-            raise SourceError("세션 파일 권한을 600으로 제한해야 해.")
-        cookies = json.loads(path.read_text(encoding="utf-8"))
-        jar = httpx.Cookies()
-        for cookie in cookies:
-            if cookie['domain'].lstrip('.') == 'library.daejin.ac.kr':
-                jar.set(cookie['name'], cookie['value'], domain='library.daejin.ac.kr',
-                        path=cookie.get('path', '/'))
-        if not jar:
-            raise SessionExpired("도서관 로그인 세션이 없어.")
-        return httpx.Client(cookies=jar, timeout=httpx.Timeout(12, connect=5),
-                            follow_redirects=False, trust_env=False,
-                            headers={'User-Agent': 'DaejinTools/0.1 (on-demand room availability)',
-                                     'Referer': ORIGIN + '/seminar_seminar_list.mir'})
-    except (OSError, ValueError, TypeError, KeyError) as exc:
-        raise SessionExpired("도서관 세션 파일을 읽을 수 없어. 운영자의 갱신이 필요해.") from exc
-
-
 class LibrarySource:
-    def __init__(self, client_factory, pause=lambda: time.sleep(0.5)):
+    def __init__(self, client_factory, pause=lambda: None):
+        # One request in flight; bounded batches need no arbitrary per-room sleep.
         self.client_factory = client_factory
         self.pause = pause
 
@@ -58,13 +30,13 @@ class LibrarySource:
                 try:
                     response = client.post(ORIGIN + path, data=data)
                 except httpx.HTTPError as exc:
-                    raise SourceError("도서관 연결에 실패했어. 자동 재시도하지 않아.") from exc
+                    raise SourceError("도서관 연결에 실패했어.") from exc
                 if response.is_redirect or response.status_code == 401:
-                    raise SessionExpired("도서관 로그인이 만료됐어. 운영자의 세션 갱신이 필요해.")
+                    raise SessionExpired("도서관 로그인이 만료됐어. 다시 로그인해 줘.")
                 if response.status_code in {403, 429}:
-                    raise SourceError("도서관에서 조회를 제한했어. 추가 요청을 중단했어.")
+                    raise SourceError("도서관에서 조회를 잠시 제한했어.")
                 if response.status_code != 200 or len(response.content) > 2_000_000:
-                    raise SourceError("도서관 응답을 확인할 수 없어. 잠시 후 직접 다시 시도해 줘.")
+                    raise SourceError("도서관 응답을 확인할 수 없어. 잠시 후 다시 시도해 줘.")
                 return response.text
 
             rooms = parse_rooms(read('/seminar_seminar_list.mir', {

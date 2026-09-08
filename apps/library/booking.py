@@ -1,4 +1,4 @@
-"""Explicit, single-attempt booking for one private operator account. No retries."""
+"""Explicit, single-attempt booking for one authenticated browser session."""
 
 import hashlib
 import json
@@ -60,9 +60,11 @@ class BookingService:
         state_path,
         now=lambda: datetime.now(KST),
         pause=lambda: time.sleep(0.5),
+        account_label=None,
     ):
         self.client_factory, self.schedule, self.state_path = client_factory, schedule, state_path
         self.now, self.pause = now, pause
+        self.account_label = account_label
         self.tickets, self.previews = {}, deque()
         self.confirmations = deque()
 
@@ -96,9 +98,9 @@ class BookingService:
         try:
             response = client.post(ORIGIN + path, data=data or {"sloc_code": "DJUL"})
         except httpx.HTTPError as exc:
-            raise SourceError("학교 연결에 실패했어. 자동 재시도하지 않아.") from exc
+            raise SourceError("학교 연결에 실패했어.") from exc
         if response.is_redirect or response.status_code == 401:
-            raise SessionExpired("로그인이 만료됐어. 운영자의 세션 갱신이 필요해.")
+            raise SessionExpired("도서관 로그인이 만료됐어. 다시 로그인해 줘.")
         if response.status_code != 200 or len(response.content) > 2_000_000:
             raise SourceError("학교가 요청을 처리하지 못했어. 추가 요청을 중단했어.")
         document(response.text)  # Also reject a login page returned as HTTP 200.
@@ -215,7 +217,11 @@ class BookingService:
                     "start": start,
                     "ends": ends,
                     "expires_in_seconds": 120,
-                    "account_notice": "연결된 운영자 본인 계정으로 예약돼. 인원 필터는 수용 인원 검색용이야.",
+                    "account_notice": (
+                        f"{self.account_label} 계정으로 예약해."
+                        if self.account_label
+                        else "현재 계정으로 예약해."
+                    ),
                 }
 
     def _journal(self):
@@ -238,7 +244,7 @@ class BookingService:
             return value
         except (OSError, ValueError) as exc:
             raise SourceError(
-                "중복 예약 방지 기록을 읽을 수 없어. 예약 전 운영자 확인이 필요해."
+                "중복 예약 방지 기록을 읽을 수 없어. 공식 내역을 확인한 뒤 다시 시도해 줘."
             ) from exc
 
     def _save(self, value):
@@ -267,8 +273,11 @@ class BookingService:
     def confirm(self, ticket, end, purpose, confirmed):
         if confirmed is not True:
             raise SourceError("최종 예약 확인이 필요해.")
-        if not isinstance(purpose, str) or not 1 <= len(purpose.strip()) <= 300:
-            raise SourceError("사용 목적을 1~300자로 입력해 줘.")
+        if not isinstance(purpose, str):
+            raise SourceError("사용 목적은 300자 이하로 입력해 줘.")
+        purpose = purpose.strip()
+        if len(purpose) > 300:
+            raise SourceError("사용 목적은 300자 이하로 입력해 줘.")
         with self.schedule.lock:
             q = self.tickets.get(ticket)
             if not q or q["expires"] <= self.now().timestamp():
@@ -280,7 +289,7 @@ class BookingService:
             while self.confirmations and now - self.confirmations[0] >= 3600:
                 self.confirmations.popleft()
             if len(self.confirmations) >= 12:
-                raise SourceError("예약 확인 요청의 시간당 한도에 도달했어. 자동 재시도하지 않아.")
+                raise SourceError("예약 확인 요청이 너무 많아. 잠시 후 다시 시도해 줘.")
             self.confirmations.append(now)
             key = "|".join((q["day"], q["room"]["code"], q["start"], end))
             with self.client_factory() as client:
@@ -313,7 +322,7 @@ class BookingService:
                     "member_count": "0",
                     "resv_use_start_date": js_date(q["day"], q["start"]),
                     "resv_use_end_date": js_date(q["day"], end),
-                    "use_purpose": purpose.strip(),
+                    "use_purpose": purpose,
                     "rental_item_list_yn": q["rental"],
                 }
                 message = self._read(client, "/seminar_resv_check.mir", payload).strip()
@@ -328,8 +337,8 @@ class BookingService:
                     "status": "unknown",
                     "message": "제출 결과를 확정하지 못했어. 중복 제출하지 말고 공식 예약 내역을 확인해 줘.",
                 }
+                self.pause()
                 try:
-                    self.pause()
                     response = client.post(
                         ORIGIN + "/seminar_resv_prss.mir", data=payload
                     )  # NEVER retry or follow redirects.

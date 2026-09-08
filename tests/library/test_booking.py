@@ -4,6 +4,7 @@ from datetime import datetime
 from importlib import import_module
 from threading import Lock
 from types import SimpleNamespace
+from urllib.parse import parse_qs
 
 import httpx
 
@@ -20,7 +21,13 @@ HISTORY = """<div id="content"><table><tr><td><a onclick="seminar_use_info('/sem
 테스트실 2026-09-07 17:00~17:30 예약중</a></td></tr></table></div>"""
 
 
-def harness(tmp_path, mutate_timeout=False, refuse=False):
+def harness(
+    tmp_path,
+    mutate_timeout=False,
+    refuse=False,
+    account_label=None,
+    expire_after_mutation=False,
+):
     from apps.library.source import KST
 
     mod = import_module("apps.library.booking")
@@ -34,7 +41,11 @@ def harness(tmp_path, mutate_timeout=False, refuse=False):
         elif path == "/seminar_end_time_list.mir":
             text = ENDS
         elif path == "/seminar_use_history_list.mir":
-            text = HISTORY if writes else EMPTY
+            text = (
+                '<form><input type="password"></form>'
+                if writes and expire_after_mutation
+                else HISTORY if writes else EMPTY
+            )
         elif path == "/seminar_resv_check.mir":
             text = "당일 예약이 이미 있어요." if refuse else ""
         elif path == "/seminar_resv_prss.mir":
@@ -58,6 +69,7 @@ def harness(tmp_path, mutate_timeout=False, refuse=False):
         lambda: tmp_path / "booking-state.json",
         now=lambda: datetime(2026, 9, 7, 12, tzinfo=KST),
         pause=lambda: None,
+        account_label=account_label,
     )
     return b, calls, writes
 
@@ -95,6 +107,41 @@ def test_ambiguous_submission_is_not_retried_even_after_restart(tmp_path):
     assert not writes2
 
 
+def test_expiry_during_post_submit_verification_returns_durable_unknown_without_retry(tmp_path):
+    import json
+
+    b, calls, writes = harness(tmp_path, expire_after_mutation=True)
+    q = b.prepare(DAY, "S01", "17:00")
+
+    result = b.confirm(q["ticket"], "17:30", "", True)
+
+    assert result["status"] == "unknown"
+    assert len(writes) == 1
+    journal = json.loads((tmp_path / "booking-state.json").read_text(encoding="utf-8"))
+    assert next(iter(journal.values())) == result
+
+
+def test_expiry_before_mutation_still_propagates_without_writing(tmp_path):
+    import pytest
+
+    from apps.library.parser import SessionExpired
+
+    b, calls, writes = harness(tmp_path)
+    q = b.prepare(DAY, "S01", "17:00")
+    original_read = b._read
+
+    def expire_before_mutation(client, path, data=None):
+        if path == "/seminar_resv_check.mir":
+            raise SessionExpired("synthetic pre-mutation expiry")
+        return original_read(client, path, data)
+
+    b._read = expire_before_mutation
+    with pytest.raises(SessionExpired, match="pre-mutation"):
+        b.confirm(q["ticket"], "17:30", "", True)
+
+    assert writes == []
+
+
 def test_ambiguous_booking_blocks_a_different_end_after_restart(tmp_path):
     b, calls, writes = harness(tmp_path, mutate_timeout=True)
     q = b.prepare(DAY, "S01", "17:00")
@@ -112,6 +159,39 @@ def test_school_rejection_stops_before_mutation(tmp_path):
     assert not writes
 
 
+def test_blank_booking_purpose_is_sent_as_blank_without_skipping_confirmation(tmp_path):
+    b, calls, writes = harness(tmp_path)
+    q = b.prepare(DAY, "S01", "17:00")
+
+    result = b.confirm(q["ticket"], "17:30", "", True)
+
+    assert result["status"] == "confirmed"
+    assert len(writes) == 1
+    payload = parse_qs(writes[0].decode(), keep_blank_values=True)
+    assert payload["use_purpose"] == [""]
+
+
+def test_booking_purpose_is_trimmed_before_the_300_character_limit(tmp_path):
+    b, calls, writes = harness(tmp_path)
+    q = b.prepare(DAY, "S01", "17:00")
+
+    result = b.confirm(q["ticket"], "17:30", "학" * 300 + "   ", True)
+
+    assert result["status"] == "confirmed"
+    payload = parse_qs(writes[0].decode(), keep_blank_values=True)
+    assert payload["use_purpose"] == ["학" * 300]
+
+
+def test_booking_preview_names_only_the_masked_current_account(tmp_path):
+    b, calls, writes = harness(tmp_path, account_label="20****34")
+
+    preview = b.prepare(DAY, "S01", "17:00")
+
+    assert preview["account_notice"] == "20****34 계정으로 예약해."
+    assert "20261234" not in preview["account_notice"]
+    assert "운영자" not in preview["account_notice"]
+
+
 def test_unapproved_end_missing_confirmation_and_expired_ticket_never_submit(tmp_path):
     import pytest
 
@@ -122,7 +202,7 @@ def test_unapproved_end_missing_confirmation_and_expired_ticket_never_submit(tmp
     for end, purpose, confirm in [
         ("19:00", "학습", True),
         ("17:30", "학습", False),
-        ("17:30", "", True),
+        ("17:30", "학" * 301, True),
     ]:
         with pytest.raises(SourceError):
             b.confirm(q["ticket"], end, purpose, confirm)
