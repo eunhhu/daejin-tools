@@ -10,8 +10,8 @@ export async function boot(doc = document, fetcher = globalThis.fetch, now = kst
   };
   const booking = createBookingUI(doc, fetcher, () => configuration, () => {
     snapshot = null;$('#schedule thead').replaceChildren();$('#schedule tbody').replaceChildren();
-    $('#table-wrap').hidden=true;$('#summary').textContent='예약 후 시간표를 다시 불러와 줘.';
-    $('#status').textContent='새로고침하면 최신 시간을 확인할 수 있어.';
+    $('#table-wrap').hidden=true;$('#summary').textContent='예약 후 시간표 갱신 필요';
+    $('#status').textContent='최신 시간 확인에는 새로고침이 필요합니다.';
   }, reauthenticate);
   const element = (tag, text, className) => {
     const node = doc.createElement(tag);
@@ -58,7 +58,7 @@ export async function boot(doc = document, fetcher = globalThis.fetch, now = kst
     $('#table-wrap').hidden = rooms.length === 0;
     const available = rooms.filter(room => room.starts.some(t =>
       cellState(room, t, snapshot.date, current) === 'available')).length;
-    $('#summary').textContent = `${rooms.length}개 호실 · 선택 가능한 시간 있음 ${available}곳`;
+    $('#summary').textContent = `${rooms.length}개 호실 · 예약 시작 가능 ${available}곳`;
     const header = element('tr');
     header.append(element('th', '시작 시간'));
     for (const room of rooms) {
@@ -75,7 +75,7 @@ export async function boot(doc = document, fetcher = globalThis.fetch, now = kst
       for (const room of rooms) {
         const state = cellState(room, time, snapshot.date, current);
         const label = {available: '가능', unavailable: '—', unknown: '?', elapsed: '·'}[state];
-        const labelLong = {available: '시작 가능', unavailable: '선택 불가', unknown: '확인 못 함', elapsed: '지난 시간'}[state];
+        const labelLong = {available: '시작 가능', unavailable: '선택 불가', unknown: '확인 불가', elapsed: '지난 시간'}[state];
         const cell = element(state === 'available' ? 'button' : 'span', label, `cell ${state}`);
         cell.setAttribute('aria-label', `${room.name} ${time} ${labelLong}`);
         cell.title = `${room.name} · ${time} · ${labelLong}`;
@@ -93,30 +93,30 @@ export async function boot(doc = document, fetcher = globalThis.fetch, now = kst
     $('#schedule thead').replaceChildren();$('#schedule tbody').replaceChildren();
     $('#loading').hidden = false; $('#table-wrap').hidden = true; $('#empty').hidden = true;
     $('#summary').textContent = '호실 확인 중';
-    $('#status').textContent = '시간표를 불러오는 중이야.';setMessage('');
+    $('#status').textContent = '시간표를 불러오는 중입니다.';setMessage('');
     try {
-      if (!validDate()) throw new Error('조회할 날짜를 선택해 줘.');
+      if (!validDate()) throw new Error('조회 날짜를 선택하세요.');
       const response = await fetcher(`/api/schedule?date=${encodeURIComponent(day)}`, {
         signal: controller.signal, cache: 'no-store', credentials: 'same-origin',
       });
       if (response.status === 401) {reauthenticate();return;}
-      if (!response.ok) throw new Error(await responseError(response, '조회에 실패했어.'));
+      if (!response.ok) throw new Error(await responseError(response, '시간표 조회에 실패했습니다.'));
       const data = await response.json();
       if (ticket !== serial) return;
-      if (data.date !== day || !Array.isArray(data.rooms)) throw new Error('조회 날짜와 응답이 일치하지 않아.');
+      if (data.date !== day || !Array.isArray(data.rooms)) throw new Error('조회 날짜와 응답이 일치하지 않습니다.');
       snapshot = data;
       const checked = new Intl.DateTimeFormat('ko-KR', {
         timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
       }).format(new Date(data.checked_at));
       $('#status').textContent = `${checked} 확인 · ${data.stale ? '이전 결과' : data.cached ? '최근 결과' : '새로 확인'}`;
       const unknown = data.rooms.filter(room => room.state !== 'ok').length;
-      setMessage(data.stale ? `이전 조회 결과야. 현재 예약 가능 여부는 다를 수 있어. ${data.warning || ''}` :
-        unknown ? `${unknown}개 호실은 확인하지 못했어. 물음표로 구분했어.` : '');
+      setMessage(data.stale ? `이전 조회 결과입니다. 현재 예약 가능 여부와 다를 수 있습니다. ${data.warning || ''}` :
+        unknown ? `${unknown}개 호실은 확인 불가 상태이며 물음표로 표시됩니다.` : '');
       render();
     } catch (error) {
       if (ticket !== serial || error.name === 'AbortError') return;
-      setMessage(error.message || '시간표를 불러오지 못했어. 다시 새로고침해 줘.');
-      $('#status').textContent = '시간표를 불러오지 못했어.';
+      setMessage(error.message || '시간표를 불러올 수 없습니다. 새로고침이 필요합니다.');
+      $('#status').textContent = '시간표를 불러올 수 없습니다.';
       $('#summary').textContent = '확인되지 않은 상태';
     } finally {
       if (ticket === serial) {$('#loading').hidden = true; $('#refresh').disabled = false;}
@@ -147,8 +147,8 @@ export async function boot(doc = document, fetcher = globalThis.fetch, now = kst
       const response=await fetcher('/api/logout',{method:'POST',credentials:'same-origin',cache:'no-store',
         headers:{'X-Library-CSRF':configuration.csrf_token || ''}});
       if (response.status===401 || response.ok) {reauthenticate();return;}
-      throw new Error(await responseError(response,'로그아웃하지 못했어.'));
-    } catch (error) {setMessage(error.message || '로그아웃하지 못했어.');$('#logout').disabled=false;}
+      throw new Error(await responseError(response,'로그아웃을 완료할 수 없습니다.'));
+    } catch (error) {setMessage(error.message || '로그아웃을 완료할 수 없습니다.');$('#logout').disabled=false;}
   });
   doc.defaultView?.addEventListener('pagehide', () => controller?.abort(), {once: true});
   dateButtons();
@@ -156,7 +156,7 @@ export async function boot(doc = document, fetcher = globalThis.fetch, now = kst
   try {
     const response = await fetcher('/api/config', {cache: 'no-store',credentials:'same-origin'});
     if (response.status === 401) {reauthenticate();return;}
-    if (!response.ok) throw new Error('조회 설정을 불러오지 못했어.');
+    if (!response.ok) throw new Error('조회 설정을 불러올 수 없습니다.');
     const config = await response.json();
     configuration = config;
     $('#account-label').textContent=typeof config.account_label==='string'?config.account_label:'';

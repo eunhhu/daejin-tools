@@ -45,7 +45,7 @@ test('login shows generic text for an empty or non-JSON failure',async()=>{
  doc.querySelector('#login-form').dispatchEvent(new dom.window.Event('submit',{cancelable:true}));
  await new Promise(resolve=>setImmediate(resolve));
 
- assert.equal(doc.querySelector('#login-status').textContent,'로그인할 수 없어.');
+ assert.equal(doc.querySelector('#login-status').textContent,'로그인할 수 없습니다.');
  assert.deepEqual(navigations,[]);
  dom.window.close();
 });

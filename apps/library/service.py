@@ -12,7 +12,7 @@ from .source import KST
 
 
 class Cooldown(SourceError):
-    def __init__(self, seconds, message="잠시 후 다시 조회해 줘."):
+    def __init__(self, seconds, message="잠시 후 다시 조회할 수 있습니다."):
         super().__init__(message)
         self.seconds = max(1, math.ceil(seconds))
 
@@ -37,9 +37,9 @@ class ScheduleService:
         try:
             day = date.fromisoformat(value)
         except (ValueError, TypeError) as exc:
-            raise ValueError('날짜 형식은 YYYY-MM-DD여야 해.') from exc
+            raise ValueError('날짜 형식은 YYYY-MM-DD여야 합니다.') from exc
         if day.isoformat() != value or not 0 <= (day - self.today()).days <= 6:
-            raise ValueError('조회는 한국 시간 기준 오늘부터 7일 이내만 지원해.')
+            raise ValueError('조회는 한국 시간 기준 오늘부터 7일 이내만 지원됩니다.')
         # One lock for all dates: concurrent visitors cannot multiply upstream batches.
         with self.lock:
             now = self.clock()
@@ -63,8 +63,8 @@ class ScheduleService:
                 wait = max(wait, 3600 - (now - self.batches[0]))
             if wait > 0:
                 reason = (self.last_error if self.cool_until > now else
-                          '시간표 조회 한도에 도달했어.')
-                message = f'{reason} {math.ceil(wait)}초 후 다시 조회해 줘.'
+                          '시간표 조회 한도에 도달했습니다.')
+                message = f'{reason} {math.ceil(wait)}초 후 다시 조회할 수 있습니다.'
                 if cached:
                     return result(cached, hit=True, warning=message)
                 raise Cooldown(wait, message)

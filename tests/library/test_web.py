@@ -275,7 +275,7 @@ def test_login_attempt_limit_ignores_forwarded_identity_headers(tmp_path):
                 json={"account_id": "20261234", "password": "wrong-password"},
             )
             assert response.status_code == 401
-            assert response.json() == {"detail": "아이디 또는 비밀번호를 확인해 줘."}
+            assert response.json() == {"detail": "아이디 또는 비밀번호가 올바르지 않습니다."}
 
         response = client.post(
             "/api/login",
@@ -402,7 +402,9 @@ def test_school_session_expiry_invalidates_only_the_calling_browser(tmp_path):
         response = first.get("/api/schedule?date=2026-09-08")
 
         assert response.status_code == 401
-        assert response.json() == {"detail": "도서관 로그인이 만료됐어. 다시 로그인해 줘."}
+        assert response.json() == {
+            "detail": "도서관 로그인이 만료되었습니다. 다시 로그인이 필요합니다."
+        }
         assert first.get("/", follow_redirects=False).headers["location"] == "/login"
         assert second.get("/api/config").status_code == 200
         assert authenticator.clients[0].closed is True
@@ -549,6 +551,6 @@ def test_disabled_booking_service_returns_controlled_unavailable(tmp_path):
 
         for response in (prepare, confirm):
             assert response.status_code == 503
-            assert response.json() == {"detail": "예약 기능을 사용할 수 없어."}
+            assert response.json() == {"detail": "예약 기능을 사용할 수 없습니다."}
     finally:
         client.close()

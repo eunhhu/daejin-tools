@@ -95,7 +95,7 @@ test('a non-JSON schedule error shows generic text',async()=>{
 
  await boot(doc,fetcher,()=>({date:'2026-09-08',time:'10:00'}));
 
- assert.equal(doc.querySelector('#message').textContent,'조회에 실패했어.');
+ assert.equal(doc.querySelector('#message').textContent,'시간표 조회에 실패했습니다.');
  dom.window.close();
 });
 
